@@ -1,140 +1,126 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
+using System.Collections.Generic; // para usar o Dictionary para armazenar os dados
+using System.IO; // para usar o File para ler e escrever no arquivo
+using System.Globalization;
 
-class Estacionamento
+class Program
 {
-    static string arquivoBanco = "banco_dados.txt";
-    static Dictionary<string, DateTime> veiculos = new Dictionary<string, DateTime>();
-    const decimal precoPorHora = 5.00m;
-    const int capacidadeMaxima = 20;
+    const string arquivoDB = "estacionamento.txt"; // armazena: placa, entrada(bool) e datetime 
+    const decimal precoHora = 5; 
+    const int capacidade = 20;
+
+    Dictionary<string, DateTime> estacionados;
 
     static void Main()
     {
-        while (true)
+        var program = new Program();
+        program.Run();
+    }
+
+    Program()
+    {
+        estacionados = CarregarDados();
+    }
+
+    void Run()
+    {
+        string opcao; // armazena a escolha no menu
+
+        do
         {
-            Console.WriteLine("\n=== MENU ESTACIONAMENTO ===");
-            Console.WriteLine("1. Registrar Entrada");
-            Console.WriteLine("2. Registrar Saída");
-            Console.WriteLine("3. Sair");
-            Console.WriteLine("4. Ver veículos estacionados");
-            Console.Write("Escolha uma opção: ");
-            string opcao = Console.ReadLine();
+            Console.WriteLine("\n=== MENU ===");
+            Console.WriteLine("1 - Entrada");
+            Console.WriteLine("2 - Saída");
+            Console.WriteLine("3 - Listar"); // lista os veiculos estacionados e a quantidade de vagas
+            Console.WriteLine("4 - Sair");
+            Console.Write("Opção: ");
+            opcao = Console.ReadLine();
 
             switch (opcao)
             {
                 case "1":
-                    RegistrarEntrada();
+                    if (estacionados.Count >= capacidade)
+                    {
+                        Console.WriteLine("Estacionamento lotado!");
+                        break;
+                    }
+
+                    Console.Write("Placa: ");
+                    string placa = Console.ReadLine().ToUpper(); // armazena a placa do veiculo
+
+                    if (estacionados.ContainsKey(placa))
+                    {
+                        Console.WriteLine("Veículo já está estacionado!");
+                    }
+                    else
+                    {
+                        estacionados.Add(placa, DateTime.Now); // adiciona a placa e a data e hora da entrada
+                        SalvarDados(estacionados); // salva os dados no txt
+                        Console.WriteLine($"Entrada registrada: {placa}");
+                    }
                     break;
+
                 case "2":
-                    RegistrarSaida();
+                    Console.Write("Placa: ");
+                    placa = Console.ReadLine()?.ToUpper() ?? string.Empty; // handle se for null
+
+                    if (estacionados.TryGetValue(placa, out DateTime entrada))
+                    {
+                        var saida = DateTime.Now;
+                        var horas = Math.Ceiling((saida - entrada).TotalHours);
+                        var valor = Convert.ToDecimal(horas) * precoHora; // converte double para decimal
+
+                        Console.WriteLine($"Tempo: {horas} horas");
+                        Console.WriteLine($"Valor: R$ {valor:F2}");
+                        estacionados.Remove(placa);
+                        SalvarDados(estacionados);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Veículo não encontrado!");
+                    }
                     break;
+
                 case "3":
-                    return;
-                case "4":
-                    ListarVeiculosEstacionados();
+                    Console.WriteLine("\nVeículos estacionados:");
+                    foreach (var v in estacionados)
+                    {
+                        Console.WriteLine($"{v.Key} - {v.Value}");
+                    }
+                    Console.WriteLine($"Total: {estacionados.Count}/{capacidade}");
                     break;
-                default:
-                    Console.WriteLine("Opção inválida");
-                    break;
-            }
-        }
-    }
-
-    static void RegistrarEntrada()
-    {
-        CarregarBanco();
-
-        if (veiculos.Count >= capacidadeMaxima)
-        {
-            Console.WriteLine("Estacionamento cheio. Não é possível registrar nova entrada.");
-            return;
-        }
-
-        Console.Write("Digite a placa do veículo: ");
-        string placa = Console.ReadLine().ToUpper();
-
-        if (veiculos.ContainsKey(placa))
-        {
-            Console.WriteLine("Veículo já está registrado no estacionamento.");
-        }
-        else
-        {
-            DateTime agora = DateTime.Now;
-            veiculos[placa] = agora;
-            File.AppendAllText(arquivoBanco, $"{placa},true,{agora}\n");
-            Console.WriteLine($"Entrada registrada para {placa} às {agora}");
-        }
-    }
-
-    static void RegistrarSaida()
-    {
-        Console.Write("Digite a placa do veículo: ");
-        string placa = Console.ReadLine().ToUpper();
-        CarregarBanco();
-
-        if (veiculos.ContainsKey(placa))
-        {
-            DateTime entrada = veiculos[placa];
-            DateTime saida = DateTime.Now;
-
-            if (saida < entrada)    
-            {
-                Console.WriteLine("Erro: A data de saída não pode ser anterior à data de entrada.");
-                return;
             }
 
-            TimeSpan duracao = saida - entrada;
-            decimal valorPagar = (decimal)Math.Ceiling(duracao.TotalHours) * precoPorHora;
-
-            Console.WriteLine($"Veículo {placa} permaneceu por {duracao.Days} dias, {duracao.Hours} horas e {duracao.Minutes} minutos.");
-            Console.WriteLine($"Valor a pagar: R$ {valorPagar:F2}");
-            veiculos.Remove(placa);
-            File.AppendAllText(arquivoBanco, $"{placa},false,{saida}\n");
-        }
-        else
-        {
-            Console.WriteLine("Veículo não encontrado no sistema.");
-        }
+        } while (opcao != "4");
     }
 
-    static void ListarVeiculosEstacionados()
+    Dictionary<string, DateTime> CarregarDados()
     {
-        CarregarBanco();
-
-        if (veiculos.Count == 0)
+        var dados = new Dictionary<string, DateTime>();
+        
+        if (File.Exists(arquivoDB))
         {
-            Console.WriteLine("Nenhum veículo está estacionado atualmente.");
-        }
-        else
-        {
-            Console.WriteLine("\n=== Veículos Estacionados ===");
-            foreach (var item in veiculos)
+            foreach (var linha in File.ReadAllLines(arquivoDB))
             {
-                Console.WriteLine($"Placa: {item.Key} | Entrada: {item.Value}");
-            }
-            Console.WriteLine($"Total de veículos: {veiculos.Count} / {capacidadeMaxima}");
-        }
-    }
-
-    static void CarregarBanco()
-    {
-        veiculos.Clear();
-        if (File.Exists(arquivoBanco))
-        {
-            string[] linhas = File.ReadAllLines(arquivoBanco);
-            foreach (string linha in linhas)
-            {
-                string[] partes = linha.Split(',');
-                if (partes.Length == 3 && partes[1] == "true")
+                var partes = linha.Split(';');
+                if (partes.Length == 2 && DateTime.TryParseExact(partes[1], "dd/MM/yyyy HH:mm:ss",
+                    null, // usa null para o parâmetro IFormatProvider
+                    DateTimeStyles.None, out DateTime data))
                 {
-                    veiculos[partes[0]] = DateTime.Parse(partes[2]);
-                }
-                else if (partes.Length == 3 && partes[1] == "false" && veiculos.ContainsKey(partes[0]))
-                {
-                    veiculos.Remove(partes[0]);
+                    dados[partes[0]] = data;
                 }
             }
         }
+        return dados;
+    }
+
+    void SalvarDados(Dictionary<string, DateTime> dados)
+    {
+        var linhas = new List<string>();
+        foreach (var item in dados)
+        {
+            linhas.Add($"{item.Key};{item.Value.ToString("dd/MM/yyyy HH:mm:ss")}");
+        }
+        File.WriteAllLines(arquivoDB, linhas);
     }
 }
